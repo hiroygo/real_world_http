@@ -1,0 +1,36 @@
+```
+POST / HTTP/1.1
+Host: localhost:8080
+Transfer-Encoding: chunked
+Accept-Encoding: gzip
+Content-Type: text/plain
+User-Agent: Go-http-client/1.1
+
+12b
+package main
+
+import (
+	"log"
+	"net/http"
+	"os"
+)
+
+func main() {
+	file, err := os.Open("main.go")
+	if err != nil {
+		panic(err)
+	}
+
+	resp, err := http.Post("http://localhost:8080", "text/plain", file)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	log.Println("Status:", resp.Status)
+}
+
+0
+
+
+```

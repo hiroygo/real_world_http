@@ -1,0 +1,13 @@
+GET / HTTP/1.1
+Host: localhost:8080
+Accept-Encoding: gzip
+User-Agent: Go-http-client/1.1
+
+
+GET / HTTP/1.1
+Host: localhost:8080
+Accept-Encoding: gzip
+Cookie: VISIT=TRUE
+User-Agent: Go-http-client/1.1
+
+

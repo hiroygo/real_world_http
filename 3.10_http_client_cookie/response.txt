@@ -1,0 +1,16 @@
+2020/11/06 00:33:26 HTTP/1.1 200 OK
+Content-Length: 36
+Content-Type: text/html; charset=utf-8
+Date: Thu, 05 Nov 2020 15:33:26 GMT
+Set-Cookie: VISIT=TRUE
+
+<html><body>初訪問</body></html>
+
+2020/11/06 00:33:26 HTTP/1.1 200 OK
+Content-Length: 54
+Content-Type: text/html; charset=utf-8
+Date: Thu, 05 Nov 2020 15:33:26 GMT
+Set-Cookie: VISIT=TRUE
+
+<html><body>2回目以降: [VISIT=TRUE]</body></html>
+

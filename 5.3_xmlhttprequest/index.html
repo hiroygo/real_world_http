@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <button id="btn">XMLHttpRequest-Test</button>
+        <br>
+        <textarea id="result"></textarea>
+        <script>
+            var btn = document.getElementById('btn');
+btn.onclick = function(){
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', "/hello.html", true);
+    xhr.onreadystatechange = function(){
+        if (xhr.readyState === 4 && xhr.status === 200){
+            var result = document.getElementById('result');
+            result.value = xhr.responseText;
+        }
+    };
+    xhr.send(null);
+};
+        </script>
+    </body>
+</html>

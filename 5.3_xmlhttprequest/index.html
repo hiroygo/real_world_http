@@ -1,17 +1,40 @@
 <!DOCTYPE html>
 <html>
     <body>
-        <button id="btn">XMLHttpRequest-Test</button>
+        <button id="btn-get">XMLHttpRequest-GET</button>
         <br>
-        <textarea id="result"></textarea>
+        <textarea id="result-get"></textarea>
         <script>
-            var btn = document.getElementById('btn');
+            var btn = document.getElementById('btn-get');
 btn.onclick = function(){
+    var result = document.getElementById('result-get');
+    result.value = "";
+
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', "/hello.html", true);
+    xhr.open('GET', "/date.html", true);
     xhr.onreadystatechange = function(){
         if (xhr.readyState === 4 && xhr.status === 200){
-            var result = document.getElementById('result');
+            result.value = xhr.responseText;
+        }
+    };
+    xhr.send(null);
+};
+        </script>
+
+        <br>
+        <button id="btn-post">XMLHttpRequest-POST</button>
+        <br>
+        <textarea id="result-post"></textarea>
+        <script>
+            var btn = document.getElementById('btn-post');
+btn.onclick = function(){
+    var result = document.getElementById('result-post');
+    result.value = "";
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', "/date.html", true);
+    xhr.onreadystatechange = function(){
+        if (xhr.readyState === 4 && xhr.status === 200){
             result.value = xhr.responseText;
         }
     };

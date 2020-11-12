@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -31,7 +33,6 @@ func handlerUpgrade(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	// TODO: あえてクローズしないでやってみる
 	defer conn.Close()
 
 	// プロトコルが変わるというレスポンスを送信する
@@ -47,13 +48,14 @@ func handlerUpgrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// ソケット通信の開始
-	for i := 1; i <= 10; i++ {
-		if _, err := fmt.Fprintf(readWriter, "%d\n", i); err != nil {
+	for i := 0; i < 5; i++ {
+		send := fmt.Sprintf("hello%d\n", i)
+		if _, err := fmt.Fprint(readWriter, send); err != nil {
 			panic(err)
 		}
 		// type Writer は必ず Flush() すること
 		readWriter.Flush()
-		log.Println("->", i)
+		log.Printf("send: %s\n", strings.TrimSpace(send))
 
 		recv, err := readWriter.ReadBytes('\n')
 		if err == io.EOF {
@@ -62,8 +64,9 @@ func handlerUpgrade(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("<- %s", string(recv))
-		time.Sleep(500 * time.Millisecond)
+		log.Printf("recv: %s\n", string(bytes.TrimSpace(recv)))
+
+		time.Sleep(time.Second)
 	}
 }
 

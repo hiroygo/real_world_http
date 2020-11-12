@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -12,8 +13,8 @@ import (
 
 func main() {
 	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   10 * time.Second,
+		KeepAlive: 10 * time.Second,
 	}
 
 	conn, err := dialer.Dial("tcp", "localhost:8080")
@@ -44,9 +45,8 @@ func main() {
 	log.Println("Headers: ", response.Header)
 
 	// TestProtocol を送受信する
-	// TODO: Client から送信を開始して、切断する
 	for {
-		data, err := reader.ReadBytes('\n')
+		recv, err := reader.ReadBytes('\n')
 		if err == io.EOF {
 			break
 		}
@@ -54,15 +54,13 @@ func main() {
 			panic(err)
 		}
 		// TrimSpace は '\n' なども削除する
-		log.Println("<-", string(bytes.TrimSpace(data)))
+		log.Printf("recv: %s\n", string(bytes.TrimSpace(recv)))
 
-		data = append([]byte("response "), data...)
-		_, err = conn.Write(data)
+		send := append([]byte("echo"), recv...)
+		_, err = fmt.Fprint(conn, string(send))
 		if err != nil {
 			panic(err)
 		}
-		// TODO:
-		// fmt.Fprint(conn, data) では送信できない
-		// サンプルの fmt.Fprintf ならできる?
+		log.Printf("send: %s\n", string(bytes.TrimSpace(send)))
 	}
 }

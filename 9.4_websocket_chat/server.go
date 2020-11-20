@@ -23,18 +23,18 @@ func handlerIndex(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "index.html")
 }
 
-func handlerJoinChat(c *ChatRoom, w http.ResponseWriter, r *http.Request) {
+func handlerJoinChat(cr *chatRoom, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	client := &Client{chatRoom: c, conn: conn, send: make(chan []byte, 256)}
-	client.chatRoom.register <- client
+	cl := &client{room: cr, conn: conn, send: make(chan []byte, 256)}
+	cl.room.register <- cl
 
-	go client.ConnectionMessageToChatRoom()
-	go client.ChatRoomMessageToConnection()
+	go cl.connectionMessageToChatRoom()
+	go cl.chatRoomMessageToConnection()
 }
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "http service address")
 
 	cr := newChatRoom()
-	go cr.Run()
+	go cr.run()
 
 	httpServer := &http.Server{Addr: *addr, ConnState: changeServerState}
 	http.HandleFunc("/", handlerIndex)

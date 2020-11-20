@@ -9,14 +9,12 @@ import (
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
+	wrTimeout = 10 * time.Second
 
-	// Time allowed to read the next pong message from the peer.
-	pongWait = 30 * time.Second
+	rdTimeout = 30 * time.Second
 
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	// Must be less than rdTimeout.
+	pingInterval = (rdTimeout * 9) / 10
 
 	// Maximum message size allowed from peer.
 	maxMessageSize = 512
@@ -32,83 +30,92 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-type Client struct {
-	chatRoom *ChatRoom
-	conn     *websocket.Conn
-	send     chan []byte
+type client struct {
+	room *chatRoom
+	conn *websocket.Conn
+	send chan []byte
 }
 
-// readPump pumps messages from the websocket connection to the hub.
-// The application runs readPump in a per-connection goroutine. The application
-// ensures that there is at most one reader on a connection by executing all
-// reads from this goroutine.
-func (c *Client) ConnectionMessageToChatRoom() {
+func (c *client) connectionMessageToChatRoom() {
 	defer func() {
-		c.chatRoom.unregister <- c
+		c.room.unregister <- c
 		c.conn.Close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	// pong が来たら、受信のタイムアウト時刻を更新する
+	c.conn.SetPongHandler(func(string) error { return c.conn.SetReadDeadline(time.Now().Add(rdTimeout)) })
+
+	if err := c.conn.SetReadDeadline(time.Now().Add(rdTimeout)); err != nil {
+		log.Println(err)
+		return
+	}
 
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("LoopSend error: %v\n", err)
+				log.Println(err)
 			}
-			s := c.conn.UnderlyingConn()
-			log.Printf("LeepSend websocket close: %v\n", s.RemoteAddr())
+			log.Printf("websocket close: %v\n", c.conn.UnderlyingConn().RemoteAddr())
 			return
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.chatRoom.broadcast <- message
+		msg = bytes.TrimSpace(bytes.Replace(msg, newline, space, -1))
+		c.room.broadcast <- broadcastMsg{src: c, msg: msg}
 	}
 }
 
-// writePump pumps messages from the hub to the websocket connection.
-// A goroutine running writePump is started for each connection. The
-// application ensures that there is at most one writer to a connection by
-// executing all writes from this goroutine.
-func (c *Client) ChatRoomMessageToConnection() {
-	ticker := time.NewTicker(pingPeriod)
+func (c *client) chatRoomMessageToConnection() {
+	ticker := time.NewTicker(pingInterval)
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
 	}()
 	for {
 		select {
-		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+		case msg, ok := <-c.send:
 			if !ok {
-				// The hub closed the channel.
+				log.Printf("%v: チャネルが閉じられているため websocket を切断します", c.conn.UnderlyingConn().RemoteAddr())
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := c.conn.SetWriteDeadline(time.Now().Add(wrTimeout)); err != nil {
+				log.Println(err)
 				return
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
 			if err != nil {
-				log.Printf("LoopRead error: %v\n", err)
+				log.Println(err)
 				return
 			}
-			w.Write(message)
+			if _, err := w.Write(msg); err != nil {
+				log.Println(err)
+				return
+			}
 
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write(newline)
-				w.Write(<-c.send)
+			// len でバッファ内の値の数を取得する
+			remainingMsg := len(c.send)
+			for i := 0; i < remainingMsg; i++ {
+				if _, err := w.Write(newline); err != nil {
+					log.Println(err)
+					return
+				}
+				if _, err := w.Write(<-c.send); err != nil {
+					log.Println(err)
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
-				log.Printf("LoopRead error: %v\n", err)
+				log.Println(err)
 				return
 			}
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			c.conn.SetWriteDeadline(time.Now().Add(wrTimeout))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("LoopRead error: %v\n", err)
+				log.Println(err)
 				return
 			}
 		}

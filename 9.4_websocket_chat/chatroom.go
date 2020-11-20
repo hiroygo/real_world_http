@@ -1,42 +1,45 @@
 package main
 
-type ChatRoom struct {
-	// Registered clients.
-	clients map[*Client]bool
+import "log"
 
-	// Inbound messages from the clients.
-	broadcast chan []byte
-
-	// Register requests from the clients.
-	register chan *Client
-
-	// Unregister requests from clients.
-	unregister chan *Client
+type broadcastMsg struct {
+	src *client
+	msg []byte
 }
 
-func newChatRoom() *ChatRoom {
-	return &ChatRoom{
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
+type chatRoom struct {
+	clients    map[*client]bool
+	broadcast  chan broadcastMsg
+	register   chan *client
+	unregister chan *client
+}
+
+func newChatRoom() *chatRoom {
+	return &chatRoom{
+		broadcast:  make(chan broadcastMsg),
+		register:   make(chan *client),
+		unregister: make(chan *client),
+		clients:    make(map[*client]bool),
 	}
 }
 
-func (r *ChatRoom) Run() {
+func (r *chatRoom) run() {
 	for {
 		select {
 		case c := <-r.register:
 			r.clients[c] = true
+			log.Printf("client registered: %v\n", c.conn.UnderlyingConn().RemoteAddr())
 		case c := <-r.unregister:
 			if _, ok := r.clients[c]; ok {
 				delete(r.clients, c)
 				close(c.send)
+				log.Printf("client unregistered: %v\n", c.conn.UnderlyingConn().RemoteAddr())
 			}
-		case msg := <-r.broadcast:
+		case brmsg := <-r.broadcast:
+			log.Printf("%s: %s\n", brmsg.src.conn.UnderlyingConn().RemoteAddr(), brmsg.msg)
 			for c := range r.clients {
 				select {
-				case c.send <- msg:
+				case c.send <- brmsg.msg:
 				// チャネルのバッファに空きが無い場合は default が実行される
 				default:
 					close(c.send)

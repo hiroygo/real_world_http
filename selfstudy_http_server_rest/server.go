@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -16,21 +17,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Println(string(rdump))
 	}
 
-	addr, err := net.ResolveIPAddr("ip", r.FormValue("q"))
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "", http.StatusInternalServerError)
+	if r.Method != http.MethodGet {
+		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	st := struct {
-		IPAddress string `json:"ipAddress"`
-	}{
-		IPAddress: addr.String(),
+	addrs := make(map[string][]string)
+	// 複数のホスト名を解決するときはホスト名を半角スペースで区切る
+	for _, name := range strings.Fields(r.FormValue("q")) {
+		if ss, err := net.LookupHost(name); err == nil {
+			addrs[name] = append(addrs[name], ss...)
+		}
 	}
-	if err := json.NewEncoder(w).Encode(st); err != nil {
-		log.Println("Error:", err)
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(addrs); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 	}
 }

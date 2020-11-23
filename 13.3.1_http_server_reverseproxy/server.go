@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"time"
+	"os"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -15,10 +15,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Println(string(d))
 	}
 
-	fmt.Fprintf(w, "<html><body>%s</body></html>", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(w, "<html><body>%s</body></html>", os.Args[1])
 }
 
 func main() {
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(os.Args[1], nil))
 }

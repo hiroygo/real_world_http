@@ -18,6 +18,7 @@ func main() {
 	}
 
 	// レスポンスの書き換えを行うハンドラ
+    // ハンドラを指定しないときは、実際のサーバの返答をそのまま返す
 	modifier := func(resp *http.Response) error {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {

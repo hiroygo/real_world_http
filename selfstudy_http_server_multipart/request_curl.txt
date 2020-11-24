@@ -1,0 +1,1 @@
+curl -F "name=hello!" -F "file=@sample.jpg;filename=send.jpg" localhost:8080

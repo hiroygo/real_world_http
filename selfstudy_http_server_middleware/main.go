@@ -2,7 +2,6 @@
 // https://tutuz-tech.hatenablog.com/entry/2020/03/23/220326
 // https://journal.lampetty.net/entry/implementing-middleware-with-http-package-in-go
 // https://blog.lufia.org/entry/2016/08/28/000000
-// https://mattn.kaoriya.net/software/lang/go/20160713120926.htm
 
 package main
 
@@ -17,7 +16,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// あえて勉強用に書いてるけど、実際に制限するときは
+// 勉強用に書いてるけど、実際に制限するときは
 // netutil.LimitedListener がいいはず
 type visitorLimit struct {
 	limiter  *rate.Limiter
@@ -25,8 +24,11 @@ type visitorLimit struct {
 }
 
 type visitorLimitManager struct {
-	mu     sync.Mutex
-	limits map[string]*visitorLimit
+	mu              sync.Mutex
+	limitRate       rate.Limit
+	limitBursts     int
+	limits          map[string]*visitorLimit
+	releaseDuration time.Duration
 }
 
 func (v *visitorLimitManager) get(ip string) *rate.Limiter {
@@ -35,27 +37,34 @@ func (v *visitorLimitManager) get(ip string) *rate.Limiter {
 
 	vl, ok := v.limits[ip]
 	if ok {
+		// limiter.Allow() が成功してもしなくても、ここで更新する必要がある
+		// アクセス制限中に limiter をリリースしないようにするため
 		vl.lastSeen = time.Now()
 		return vl.limiter
 	}
 
-	lim := rate.NewLimiter(1, 2)
+	lim := rate.NewLimiter(v.limitRate, v.limitBursts)
 	v.limits[ip] = &visitorLimit{limiter: lim, lastSeen: time.Now()}
 	return lim
 }
 
-func (v *visitorLimitManager) release(d time.Duration) {
+// map が巨大になると、処理時間が増加する
+func (v *visitorLimitManager) releaseOldLimits() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
 	for ip, vl := range v.limits {
-		if time.Since(vl.lastSeen) > d {
+		if time.Since(vl.lastSeen) > v.releaseDuration {
 			delete(v.limits, ip)
 		}
 	}
 }
 
-var vlManager = &visitorLimitManager{limits: make(map[string]*visitorLimit)}
+var vlManager = &visitorLimitManager{
+	limits:    make(map[string]*visitorLimit),
+	limitRate: rate.Every(1 * time.Minute), limitBursts: 2,
+	releaseDuration: 5 * time.Minute,
+}
 
 func limitRequest(h http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
@@ -89,19 +98,20 @@ func requireId(h http.Handler) http.Handler {
 }
 
 func handleHello(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Hello")
+	fmt.Fprint(w, "<html><body>hello world</body></html>")
 }
 
 func main() {
 	go func() {
 		for {
 			select {
-			case <-time.After(1 * time.Minute):
-				vlManager.release(1 * time.Minute)
+			case <-time.After(1 * time.Second):
+				vlManager.releaseOldLimits()
 			}
 		}
 	}()
 
-	http.Handle("/", limitRequest(requireId(http.HandlerFunc(handleHello))))
+	// http.Handle("/", limitRequest(requireId(http.HandlerFunc(handleHello))))
+	http.Handle("/", limitRequest(http.HandlerFunc(handleHello)))
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
